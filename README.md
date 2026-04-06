@@ -1,20 +1,32 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Cappuccino7 Café Website
 
-# Run and deploy your AI Studio app
+A modern, responsive website for Cappuccino7 Café, built with React, Vite, and Tailwind CSS.
 
-This contains everything you need to run your app locally.
+## Features
+-   **Responsive Design**: Optimized for mobile, tablet, and desktop.
+-   **Admin Panel**: Manage menu items, gallery images, and café settings (logo).
+-   **Firebase Integration**: Real-time updates for menu and gallery.
+-   **Dark Mode**: Support for both light and dark themes.
 
-View your app in AI Studio: https://ai.studio/apps/8b36e2f6-ce12-47af-beb5-8962816c1b4b
+## Deployment to Netlify
 
-## Run Locally
+To host this website on Netlify via GitHub:
 
-**Prerequisites:**  Node.js
+1.  **Push to GitHub**: Push your code to a GitHub repository.
+2.  **Connect to Netlify**:
+    -   Log in to Netlify and click **Add new site** > **Import an existing project**.
+    -   Select **GitHub** and choose your repository.
+3.  **Configure Build Settings**:
+    -   **Build command**: `npm run build`
+    -   **Publish directory**: `dist`
+4.  **Environment Variables**:
+    -   Go to **Site settings** > **Environment variables**.
+    -   Add `GEMINI_API_KEY` if you use Gemini AI features.
+    -   Add any other variables from `.env.example`.
+5.  **Deploy**: Click **Deploy site**.
 
+### Routing (SPA)
+The project includes a `netlify.toml` and `public/_redirects` file to handle client-side routing. This ensures that refreshing the page on any route (like `/about`) will correctly load the app.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+### Firebase Configuration
+The app uses `firebase-applet-config.json` for its configuration. Ensure this file is included in your repository or manually added to your build environment if you choose to exclude it from version control.
