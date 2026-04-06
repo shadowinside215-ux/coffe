@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component } from 'react';
 import { 
   Coffee, 
   Utensils, 
@@ -18,9 +18,364 @@ import {
   Menu as MenuIcon, 
   X,
   ShoppingBag,
-  ArrowRight
+  ArrowRight,
+  Lock,
+  Upload,
+  Trash2,
+  LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { db, auth } from './firebase';
+import { 
+  collection, 
+  addDoc, 
+  onSnapshot, 
+  query, 
+  orderBy, 
+  deleteDoc, 
+  doc, 
+  setDoc,
+  getDoc,
+  getDocFromServer,
+  serverTimestamp 
+} from 'firebase/firestore';
+import { signInAnonymously } from 'firebase/auth';
+import { Plus, Edit2, Save, Image as ImageIcon, AlertCircle } from 'lucide-react';
+
+// --- Error Handling ---
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+  }
+}
+
+const handleFirestoreError = (error: unknown, operationType: OperationType, path: string | null) => {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  // We don't throw here to avoid crashing the whole app, but we log it clearly
+};
+
+// --- Admin Login Component ---
+
+const AdminLogin = ({ onLogin, onClose }: { onLogin: () => void, onClose: () => void }) => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<React.ReactNode>('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+    
+    if (username === 'sam' && password === 'sam2006') {
+      signInAnonymously(auth).then(() => {
+        onLogin();
+      }).catch(err => {
+        console.error("Auth error:", err);
+        if (err.code === 'auth/admin-restricted-operation') {
+          setError(
+            <span>
+              Anonymous Authentication is disabled. Please enable it in the{' '}
+              <a 
+                href="https://console.firebase.google.com/project/gen-lang-client-0240694130/authentication/providers" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="underline font-bold"
+              >
+                Firebase Console
+              </a>.
+            </span>
+          );
+        } else {
+          setError("Authentication failed: " + (err.message || "Unknown error"));
+        }
+        setIsLoading(false);
+      });
+    } else {
+      setError('Invalid credentials');
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-coffee-950/90 backdrop-blur-md flex items-center justify-center p-6">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        className="bg-white dark:bg-coffee-900 p-8 rounded-3xl shadow-2xl max-w-md w-full border border-coffee-100 dark:border-coffee-800 relative"
+      >
+        <button 
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 text-coffee-400 hover:text-coffee-600 dark:hover:text-white transition-colors"
+        >
+          <X size={24} />
+        </button>
+        <div className="flex justify-center mb-6">
+          <div className="bg-coffee-800 p-3 rounded-2xl">
+            <Lock className="text-white" size={32} />
+          </div>
+        </div>
+        <h2 className="text-2xl font-serif font-bold text-center text-coffee-900 dark:text-white mb-8">Admin Access</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-coffee-700 dark:text-coffee-300 mb-1">Username</label>
+            <input 
+              type="text" 
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-coffee-100 dark:border-coffee-800 bg-coffee-50 dark:bg-coffee-950 text-coffee-900 dark:text-white focus:ring-2 focus:ring-coffee-500 outline-none transition-all"
+              placeholder="Enter username"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-coffee-700 dark:text-coffee-300 mb-1">Password</label>
+            <input 
+              type="password" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-coffee-100 dark:border-coffee-800 bg-coffee-50 dark:bg-coffee-950 text-coffee-900 dark:text-white focus:ring-2 focus:ring-coffee-500 outline-none transition-all"
+              placeholder="Enter password"
+              required
+            />
+          </div>
+          {error && <p className="text-red-500 text-sm text-center bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">{error}</p>}
+          <button 
+            type="submit" 
+            disabled={isLoading}
+            className="btn-primary w-full py-4 text-lg mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Authenticating...' : 'Login'}
+          </button>
+        </form>
+      </motion.div>
+    </div>
+  );
+};
+
+// --- Admin Panel Component ---
+
+const AdminPanel = ({ onLogout }: { onLogout: () => void }) => {
+  const [activeTab, setActiveTab] = useState<'gallery' | 'menu' | 'settings'>('gallery');
+  const [images, setImages] = useState<any[]>([]);
+  const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [logo, setLogo] = useState<string>('');
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const [newItem, setNewItem] = useState({ name: '', price: '', desc: '', category: 'Coffee' });
+
+  // @ts-ignore
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'demo';
+  // @ts-ignore
+  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'ml_default';
+
+  useEffect(() => {
+    const unsubGallery = onSnapshot(query(collection(db, 'gallery'), orderBy('createdAt', 'desc')), (snapshot) => {
+      setImages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'gallery');
+    });
+    const unsubMenu = onSnapshot(query(collection(db, 'menu'), orderBy('category'), orderBy('name')), (snapshot) => {
+      setMenuItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'menu');
+    });
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'logo'), (doc) => {
+      if (doc.exists()) setLogo(doc.data().value);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/logo');
+    });
+    return () => { unsubGallery(); unsubMenu(); unsubSettings(); };
+  }, []);
+
+  const handleUpload = (type: 'gallery' | 'logo') => {
+    // @ts-ignore
+    if (!window.cloudinary) return alert("Cloudinary not loaded");
+    // @ts-ignore
+    const widget = window.cloudinary.createUploadWidget(
+      { cloudName, uploadPreset, sources: ['local', 'url', 'camera'], multiple: false },
+      (error: any, result: any) => {
+        if (!error && result && result.event === "success") {
+          const url = result.info.secure_url;
+          if (type === 'gallery') {
+            addDoc(collection(db, 'gallery'), { url, publicId: result.info.public_id, createdAt: serverTimestamp() });
+          } else {
+            setDoc(doc(db, 'settings', 'logo'), { value: url });
+          }
+        }
+      }
+    );
+    widget.open();
+  };
+
+  const handleAddMenuItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await addDoc(collection(db, 'menu'), newItem);
+    setNewItem({ name: '', price: '', desc: '', category: 'Coffee' });
+  };
+
+  const handleUpdateMenuItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await setDoc(doc(db, 'menu', editingItem.id), editingItem);
+    setEditingItem(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-coffee-50 dark:bg-coffee-950 overflow-y-auto p-6">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
+          <div>
+            <h1 className="text-3xl font-serif font-bold text-coffee-900 dark:text-white">Admin Dashboard</h1>
+            <div className="flex gap-4 mt-4">
+              {(['gallery', 'menu', 'settings'] as const).map(tab => (
+                <button 
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-4 py-2 rounded-lg font-medium capitalize transition-all ${activeTab === tab ? 'bg-coffee-800 text-white' : 'bg-white dark:bg-coffee-800 text-coffee-600 dark:text-coffee-300'}`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button onClick={onLogout} className="btn-secondary flex items-center gap-2">
+            <LogOut size={20} /> Logout
+          </button>
+        </div>
+
+        {activeTab === 'gallery' && (
+          <div className="space-y-8">
+            <button onClick={() => handleUpload('gallery')} className="btn-primary flex items-center gap-2">
+              <Upload size={20} /> Upload to Gallery
+            </button>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              {images.map((img) => (
+                <div key={img.id} className="relative group rounded-2xl overflow-hidden shadow-lg aspect-square">
+                  <img src={img.url} alt="Gallery" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <button onClick={() => deleteDoc(doc(db, 'gallery', img.id))} className="bg-red-500 text-white p-3 rounded-full hover:scale-110 transition-transform">
+                      <Trash2 size={24} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'menu' && (
+          <div className="space-y-12">
+            <form onSubmit={handleAddMenuItem} className="bg-white dark:bg-coffee-900 p-6 rounded-2xl shadow-sm grid md:grid-cols-4 gap-4 items-end">
+              <div className="col-span-1">
+                <label className="block text-sm font-medium mb-1">Name</label>
+                <input value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} className="w-full p-2 rounded-lg border dark:bg-coffee-800 dark:border-coffee-700" required />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-sm font-medium mb-1">Price (MAD)</label>
+                <input value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} className="w-full p-2 rounded-lg border dark:bg-coffee-800 dark:border-coffee-700" required />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-sm font-medium mb-1">Category</label>
+                <select value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} className="w-full p-2 rounded-lg border dark:bg-coffee-800 dark:border-coffee-700">
+                  <option>Coffee</option>
+                  <option>Drinks</option>
+                  <option>Desserts</option>
+                </select>
+              </div>
+              <button type="submit" className="btn-primary flex items-center justify-center gap-2"><Plus size={20} /> Add Item</button>
+              <div className="col-span-full">
+                <label className="block text-sm font-medium mb-1">Description</label>
+                <input value={newItem.desc} onChange={e => setNewItem({...newItem, desc: e.target.value})} className="w-full p-2 rounded-lg border dark:bg-coffee-800 dark:border-coffee-700" />
+              </div>
+            </form>
+
+            <div className="grid gap-4">
+              {menuItems.map(item => (
+                <div key={item.id} className="bg-white dark:bg-coffee-900 p-4 rounded-xl shadow-sm flex justify-between items-center">
+                  {editingItem?.id === item.id ? (
+                    <form onSubmit={handleUpdateMenuItem} className="flex-1 grid md:grid-cols-4 gap-4 items-center">
+                      <input value={editingItem.name} onChange={e => setEditingItem({...editingItem, name: e.target.value})} className="p-2 border rounded dark:bg-coffee-800" />
+                      <input value={editingItem.price} onChange={e => setEditingItem({...editingItem, price: e.target.value})} className="p-2 border rounded dark:bg-coffee-800" />
+                      <select value={editingItem.category} onChange={e => setEditingItem({...editingItem, category: e.target.value})} className="p-2 border rounded dark:bg-coffee-800">
+                        <option>Coffee</option>
+                        <option>Drinks</option>
+                        <option>Desserts</option>
+                      </select>
+                      <div className="flex gap-2">
+                        <button type="submit" className="text-green-500 p-2"><Save size={20} /></button>
+                        <button type="button" onClick={() => setEditingItem(null)} className="text-red-500 p-2"><X size={20} /></button>
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      <div>
+                        <span className="font-bold">{item.name}</span>
+                        <span className="ml-4 text-coffee-500">{item.price} MAD</span>
+                        <span className="ml-4 text-xs bg-coffee-100 dark:bg-coffee-800 px-2 py-1 rounded">{item.category}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => setEditingItem(item)} className="text-coffee-600 p-2"><Edit2 size={20} /></button>
+                        <button onClick={() => deleteDoc(doc(db, 'menu', item.id))} className="text-red-500 p-2"><Trash2 size={20} /></button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'settings' && (
+          <div className="bg-white dark:bg-coffee-900 p-8 rounded-3xl shadow-sm max-w-2xl">
+            <h2 className="text-xl font-bold mb-6">Logo Settings</h2>
+            <div className="flex items-center gap-8">
+              <div className="w-48 h-48 flex items-center justify-center overflow-hidden border-2 border-dashed border-coffee-200 dark:border-coffee-700">
+                {logo ? <img src={logo} alt="Logo" className="w-full h-full object-contain" /> : <ImageIcon className="text-coffee-300" size={48} />}
+              </div>
+              <div className="space-y-4">
+                <button onClick={() => handleUpload('logo')} className="btn-primary flex items-center gap-2">
+                  <Upload size={20} /> {logo ? 'Change Logo' : 'Upload Logo'}
+                </button>
+                {logo && (
+                  <button onClick={() => setDoc(doc(db, 'settings', 'logo'), { value: '' })} className="text-red-500 text-sm hover:underline block">
+                    Remove Logo
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // --- Components ---
 
@@ -28,11 +383,20 @@ const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [logo, setLogo] = useState<string>('');
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    const unsub = onSnapshot(doc(db, 'settings', 'logo'), (doc) => {
+      if (doc.exists()) setLogo(doc.data().value);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/logo');
+    });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      unsub();
+    };
   }, []);
 
   useEffect(() => {
@@ -54,9 +418,9 @@ const Navbar = () => {
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? 'glass-nav py-3' : 'bg-transparent py-6'}`}>
       <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
-        <a href="#home" className="flex items-center gap-2 group">
-          <div className="bg-coffee-800 p-2 rounded-lg group-hover:rotate-12 transition-transform">
-            <Coffee className="text-white w-6 h-6" />
+        <a href="#home" className="flex items-center gap-3 group">
+          <div className="group-hover:scale-110 transition-transform overflow-hidden flex items-center justify-center w-16 h-16">
+            {logo ? <img src={logo} alt="Logo" className="w-full h-full object-contain" /> : <div className="bg-coffee-800 p-3 rounded-lg"><Coffee className="text-white w-8 h-8" /></div>}
           </div>
           <span className={`text-2xl font-serif font-bold tracking-tight ${isScrolled ? 'text-coffee-900 dark:text-white' : 'text-white'}`}>
             Cappuccino<span className="text-coffee-500">7</span>
@@ -242,27 +606,20 @@ const About = () => {
 
 const Menu = () => {
   const [activeCategory, setActiveCategory] = useState('Coffee');
+  const [menuItems, setMenuItems] = useState<any[]>([]);
 
-  const menuData = {
-    Coffee: [
-      { name: 'Cappuccino', price: '25 MAD', desc: 'Rich espresso with steamed milk foam' },
-      { name: 'Espresso', price: '15 MAD', desc: 'Pure and intense coffee shot' },
-      { name: 'Latte', price: '28 MAD', desc: 'Smooth espresso with plenty of steamed milk' },
-      { name: 'Mocha', price: '32 MAD', desc: 'Espresso with chocolate and steamed milk' },
-    ],
-    Drinks: [
-      { name: 'Fresh Orange Juice', price: '20 MAD', desc: '100% natural squeezed oranges' },
-      { name: 'Green Smoothie', price: '35 MAD', desc: 'Spinach, apple, and ginger blend' },
-      { name: 'Berry Blast', price: '38 MAD', desc: 'Mixed berries with yogurt' },
-      { name: 'Iced Tea', price: '22 MAD', desc: 'Homemade peach or lemon iced tea' },
-    ],
-    Desserts: [
-      { name: 'Butter Croissant', price: '12 MAD', desc: 'Flaky and buttery French pastry' },
-      { name: 'Chocolate Cake', price: '45 MAD', desc: 'Rich dark chocolate layer cake' },
-      { name: 'Oatmeal Cookies', price: '10 MAD', desc: 'Healthy and chewy with raisins' },
-      { name: 'Cheesecake', price: '48 MAD', desc: 'Classic New York style with berry topping' },
-    ]
-  };
+  useEffect(() => {
+    const q = query(collection(db, 'menu'), orderBy('name'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setMenuItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'menu');
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const categories = ['Coffee', 'Drinks', 'Desserts'];
+  const filteredItems = menuItems.filter(item => item.category === activeCategory);
 
   return (
     <section id="menu" className="py-24 bg-coffee-50 dark:bg-coffee-900 transition-colors duration-300">
@@ -274,7 +631,7 @@ const Menu = () => {
 
         {/* Category Tabs */}
         <div className="flex justify-center gap-4 mb-12 flex-wrap">
-          {Object.keys(menuData).map((cat) => (
+          {categories.map((cat) => (
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
@@ -291,10 +648,11 @@ const Menu = () => {
 
         {/* Menu Grid */}
         <div className="grid md:grid-cols-2 gap-8">
-          <AnimatePresence mode="wait">
-            {menuData[activeCategory as keyof typeof menuData].map((item, i) => (
+          <AnimatePresence mode="popLayout">
+            {filteredItems.map((item, i) => (
               <motion.div
-                key={`${activeCategory}-${item.name}`}
+                key={item.id}
+                layout
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95 }}
@@ -308,11 +666,16 @@ const Menu = () => {
                   <p className="text-coffee-600 dark:text-coffee-300 text-sm">{item.desc}</p>
                 </div>
                 <span className="text-lg font-bold text-coffee-800 dark:text-coffee-100 bg-coffee-50 dark:bg-coffee-900 px-3 py-1 rounded-lg transition-colors duration-300">
-                  {item.price}
+                  {item.price} MAD
                 </span>
               </motion.div>
             ))}
           </AnimatePresence>
+          {filteredItems.length === 0 && (
+            <div className="col-span-2 text-center py-12 text-coffee-500 italic">
+              No items in this category yet.
+            </div>
+          )}
         </div>
       </div>
     </section>
@@ -320,14 +683,30 @@ const Menu = () => {
 };
 
 const Gallery = () => {
-  const images = [
-    "https://images.unsplash.com/photo-1442512595331-e89e73853f31?q=80&w=2070&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=2047&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1559925393-8be0ec41b5ec?q=80&w=2070&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1511920170033-f8396924c348?q=80&w=1974&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1509042239860-f550ce710b93?q=80&w=1974&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=2070&auto=format&fit=crop",
-  ];
+  const [images, setImages] = useState<any[]>([]);
+
+  useEffect(() => {
+    const q = query(collection(db, 'gallery'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedImages = snapshot.docs.map(doc => doc.data().url);
+      if (fetchedImages.length > 0) {
+        setImages(fetchedImages);
+      } else {
+        // Fallback to default images if none in DB
+        setImages([
+          "https://images.unsplash.com/photo-1442512595331-e89e73853f31?q=80&w=2070&auto=format&fit=crop",
+          "https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=2047&auto=format&fit=crop",
+          "https://images.unsplash.com/photo-1559925393-8be0ec41b5ec?q=80&w=2070&auto=format&fit=crop",
+          "https://images.unsplash.com/photo-1511920170033-f8396924c348?q=80&w=1974&auto=format&fit=crop",
+          "https://images.unsplash.com/photo-1509042239860-f550ce710b93?q=80&w=1974&auto=format&fit=crop",
+          "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=2070&auto=format&fit=crop",
+        ]);
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'gallery');
+    });
+    return () => unsubscribe();
+  }, []);
 
   return (
     <section id="gallery" className="py-24 bg-white dark:bg-coffee-950 transition-colors duration-300">
@@ -448,16 +827,6 @@ const Contact = () => {
 
               <div className="flex gap-6">
                 <div className="bg-white dark:bg-coffee-800 w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm border border-coffee-100 dark:border-coffee-700 flex-shrink-0 transition-colors duration-300">
-                  <Globe className="text-coffee-600 dark:text-coffee-400" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-coffee-900 dark:text-white text-lg mb-1">Website</h4>
-                  <p className="text-coffee-600 dark:text-coffee-300">cappuccino7.ma</p>
-                </div>
-              </div>
-
-              <div className="flex gap-6">
-                <div className="bg-white dark:bg-coffee-800 w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm border border-coffee-100 dark:border-coffee-700 flex-shrink-0 transition-colors duration-300">
                   <Clock className="text-coffee-600 dark:text-coffee-400" />
                 </div>
                 <div>
@@ -485,15 +854,26 @@ const Contact = () => {
   );
 };
 
-const Footer = () => {
+const Footer = ({ onOpenAdmin }: { onOpenAdmin: () => void }) => {
+  const [logo, setLogo] = useState<string>('');
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'logo'), (doc) => {
+      if (doc.exists()) setLogo(doc.data().value);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/logo');
+    });
+    return () => unsub();
+  }, []);
+
   return (
     <footer className="bg-white dark:bg-coffee-950 pt-24 pb-12 border-t border-coffee-100 dark:border-coffee-900 transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-6">
         <div className="grid md:grid-cols-4 gap-12 mb-16">
           <div className="col-span-2">
-            <a href="#home" className="flex items-center gap-2 mb-6">
-              <div className="bg-coffee-800 p-2 rounded-lg">
-                <Coffee className="text-white w-6 h-6" />
+            <a href="#home" className="flex items-center gap-3 mb-6">
+              <div className="w-16 h-16 flex items-center justify-center overflow-hidden">
+                {logo ? <img src={logo} alt="Logo" className="w-full h-full object-contain" /> : <div className="bg-coffee-800 p-3 rounded-lg"><Coffee className="text-white w-8 h-8" /></div>}
               </div>
               <span className="text-2xl font-serif font-bold tracking-tight text-coffee-900 dark:text-white">
                 Cappuccino<span className="text-coffee-500">7</span>
@@ -503,12 +883,28 @@ const Footer = () => {
               Experience the finest coffee and desserts in Salé. Our passion for quality and community makes us your perfect daily escape.
             </p>
             <div className="flex gap-4">
-              <a href="#" className="w-10 h-10 bg-coffee-50 dark:bg-coffee-900 rounded-full flex items-center justify-center text-coffee-600 dark:text-coffee-300 hover:bg-coffee-800 hover:text-white transition-all">
+              <a 
+                href="https://www.instagram.com/cappuccino7.mahajsala?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="w-10 h-10 bg-coffee-50 dark:bg-coffee-900 rounded-full flex items-center justify-center text-coffee-600 dark:text-coffee-300 hover:bg-coffee-800 hover:text-white transition-all"
+              >
                 <Instagram size={20} />
               </a>
-              <a href="#" className="w-10 h-10 bg-coffee-50 dark:bg-coffee-900 rounded-full flex items-center justify-center text-coffee-600 dark:text-coffee-300 hover:bg-coffee-800 hover:text-white transition-all">
+              <a 
+                href="https://web.facebook.com/people/Cappuccino7Mahajsala/100069623504882/?locale=fr_FR&_rdc=1&_rdr#" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="w-10 h-10 bg-coffee-50 dark:bg-coffee-900 rounded-full flex items-center justify-center text-coffee-600 dark:text-coffee-300 hover:bg-coffee-800 hover:text-white transition-all"
+              >
                 <Facebook size={20} />
               </a>
+              <button 
+                onClick={onOpenAdmin}
+                className="w-10 h-10 bg-coffee-50 dark:bg-coffee-900 rounded-full flex items-center justify-center text-coffee-600 dark:text-coffee-300 hover:bg-coffee-800 hover:text-white transition-all"
+              >
+                <Lock size={18} />
+              </button>
             </div>
           </div>
 
@@ -546,6 +942,23 @@ const Footer = () => {
 // --- Main App ---
 
 export default function App() {
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+
+  useEffect(() => {
+    // Validate Connection to Firestore
+    const testConnection = async () => {
+      try {
+        await getDocFromServer(doc(db, 'settings', 'connection-test'));
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration. The client appears to be offline.");
+        }
+      }
+    };
+    testConnection();
+  }, []);
+
   return (
     <div className="min-h-screen font-sans">
       <Navbar />
@@ -557,7 +970,31 @@ export default function App() {
         <Reviews />
         <Contact />
       </main>
-      <Footer />
+      <Footer onOpenAdmin={() => setShowAdminLogin(true)} />
+
+      {/* Admin Overlays */}
+      <AnimatePresence mode="wait">
+        {showAdminLogin && !isAdminLoggedIn ? (
+          <motion.div key="admin-login-wrapper">
+            <AdminLogin 
+              onLogin={() => {
+                setIsAdminLoggedIn(true);
+                setShowAdminLogin(false);
+              }} 
+              onClose={() => setShowAdminLogin(false)}
+            />
+          </motion.div>
+        ) : isAdminLoggedIn ? (
+          <motion.div key="admin-panel-wrapper">
+            <AdminPanel 
+              onLogout={() => {
+                setIsAdminLoggedIn(false);
+                auth.signOut();
+              }} 
+            />
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

@@ -1,0 +1,66 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: gallery
+// Document ID: auto-generated
+// Fields:
+//   - url: string (required) - Cloudinary image URL
+//   - publicId: string (optional) - Cloudinary public ID
+//   - createdAt: timestamp (required) - Creation time
+//   - caption: string (optional) - Image caption
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isValidGalleryImage(data) {
+      return data.keys().hasAll(['url', 'createdAt']) &&
+             data.url is string && data.url.size() < 1000 &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidMenuItem(data) {
+      return data.keys().hasAll(['name', 'price', 'category']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.price is string && data.price.size() > 0 && data.price.size() < 20 &&
+             data.category in ['Coffee', 'Drinks', 'Desserts'];
+    }
+
+    function isValidSetting(data) {
+      return data.keys().hasAll(['value']) &&
+             data.value is string && data.value.size() < 2000;
+    }
+
+    // Gallery Rules
+    match /gallery/{imageId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidGalleryImage(request.resource.data);
+      allow update: if isAuthenticated() && isValidGalleryImage(request.resource.data);
+      allow delete: if isAuthenticated();
+    }
+
+    // Menu Rules
+    match /menu/{itemId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidMenuItem(request.resource.data);
+      allow update: if isAuthenticated() && isValidMenuItem(request.resource.data);
+      allow delete: if isAuthenticated();
+    }
+
+    // Settings Rules
+    match /settings/{settingId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidSetting(request.resource.data);
+      allow update: if isAuthenticated() && isValidSetting(request.resource.data);
+      allow delete: if isAuthenticated();
+    }
+  }
+}

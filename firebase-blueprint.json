@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "GalleryImage": {
+      "title": "Gallery Image",
+      "description": "An image uploaded to Cloudinary and stored in the gallery.",
+      "type": "object",
+      "properties": {
+        "url": { "type": "string", "format": "uri" },
+        "publicId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["url", "createdAt"]
+    },
+    "MenuItem": {
+      "title": "Menu Item",
+      "description": "A food or drink item in the menu.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "price": { "type": "string" },
+        "desc": { "type": "string" },
+        "category": { "type": "string", "enum": ["Coffee", "Drinks", "Desserts"] },
+        "order": { "type": "number" }
+      },
+      "required": ["name", "price", "category"]
+    },
+    "Setting": {
+      "title": "Setting",
+      "description": "Global app settings like logo.",
+      "type": "object",
+      "properties": {
+        "value": { "type": "string" }
+      },
+      "required": ["value"]
+    }
+  },
+  "firestore": {
+    "/gallery": { "schema": "GalleryImage", "description": "Gallery images" },
+    "/menu": { "schema": "MenuItem", "description": "Menu items" },
+    "/settings": { "schema": "Setting", "description": "Global settings" }
+  }
+}
