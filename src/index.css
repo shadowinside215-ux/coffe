@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", ui-serif, Georgia, serif;
+  
+  --color-coffee-50: #fdf8f6;
+  --color-coffee-100: #f2e8e5;
+  --color-coffee-200: #eaddd7;
+  --color-coffee-300: #d5beb3;
+  --color-coffee-400: #bb9d8f;
+  --color-coffee-500: #a17c6b;
+  --color-coffee-600: #89604e;
+  --color-coffee-700: #734e3e;
+  --color-coffee-800: #5d3f32;
+  --color-coffee-900: #4d352b;
+  --color-coffee-950: #291a14;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-coffee-50 text-coffee-900 antialiased transition-colors duration-300;
+  }
+
+  .dark body {
+    @apply bg-coffee-950 text-coffee-50;
+  }
+}
+
+.glass-nav {
+  @apply bg-white/80 backdrop-blur-md border-b border-coffee-100 transition-colors duration-300;
+}
+
+.dark .glass-nav {
+  @apply bg-coffee-950/80 border-coffee-900;
+}
+
+.menu-card {
+  @apply bg-white p-6 rounded-2xl shadow-sm border border-coffee-100 transition-all duration-300 hover:shadow-md hover:-translate-y-1;
+}
+
+.dark .menu-card {
+  @apply bg-coffee-900 border-coffee-800;
+}
+
+.btn-primary {
+  @apply bg-coffee-800 text-white px-8 py-3 rounded-full font-medium transition-all duration-300 hover:bg-coffee-900 hover:shadow-lg active:scale-95;
+}
+
+.dark .btn-primary {
+  @apply bg-coffee-700 hover:bg-coffee-600;
+}
+
+.btn-secondary {
+  @apply bg-white text-coffee-800 border border-coffee-200 px-8 py-3 rounded-full font-medium transition-all duration-300 hover:bg-coffee-50 hover:border-coffee-300 active:scale-95;
+}
+
+.dark .btn-secondary {
+  @apply bg-coffee-900 text-coffee-100 border-coffee-800 hover:bg-coffee-800;
+}
