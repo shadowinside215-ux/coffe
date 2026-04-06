@@ -1,4 +1,4 @@
-# Cappuccino7 Café Website
+# Cappuccino7 - Hosted by Netlify
 
 A modern, responsive website for Cappuccino7 Café, built with React, Vite, and Tailwind CSS.
 
